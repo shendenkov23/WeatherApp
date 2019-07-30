@@ -33,6 +33,11 @@ private class Geobytes {
 typealias WeatherHandler = (_ weather: WeatherModel?, _ cell: CityCell, _ indexPath: IndexPath) -> ()
 
 class WeatherHelper {
+  
+  private let kOpenWeatherMapAppID = <#YOUR OWN OPEN WEATHER MAP APP ID#>
+  
+  // MARK: -
+  
   private var completionHandler: WeatherHandler?
   lazy var getWeatherQueue: OperationQueue = {
     var queue = OperationQueue()
@@ -41,16 +46,20 @@ class WeatherHelper {
     return queue
   }()
   
+
+  
   let weatherCache = NSCache<NSString, WeatherModel>()
+  
+  // MARK: -
   
   static let shared = WeatherHelper()
   private init() {}
   
-  private let openWeatherMapAppID = "0fdedd4e61dcc8ef297b6e5ea5f53a72"
+  // MARK: -
   
   func getWeather(_ latitude: String, longitude: String, cell: CityCell, indexPath: IndexPath, handler: @escaping WeatherHandler) {
     self.completionHandler = handler
-    guard let url = URL(string: "https://api.openweathermap.org/data/2.5/weather?lat=\(latitude)&lon=\(longitude)&appid=\(openWeatherMapAppID)") else {
+    guard let url = weatherUrl(latitude: latitude, longitude: longitude) else {
       return
     }
     
@@ -58,22 +67,22 @@ class WeatherHelper {
       print("Return cached Weather for \(url)")
       self.completionHandler?(cachedWeather, cell, indexPath)
     } else {
-      /* check if there is a download task that is currently downloading the same image. */
+      /* check if there is a download task that is currently downloading the same weather. */
       if let operations = (getWeatherQueue.operations as? [WeatherOperation])?.filter({ $0.url == url && $0.isFinished == false && $0.isExecuting == true }), let operation = operations.first {
         print("Increase the priority for \(url)")
         operation.queuePriority = .veryHigh
       } else {
-        /* create a new task to download the image.  */
+        /* create a new task to get weather.  */
         print("Create a new task for \(url)")
         let operation = WeatherOperation(url: url, cell: cell, indexPath: indexPath)
-      
+        
         operation.handler = { weather, cell, indexPath in
           if let weather = weather {
             self.weatherCache.setObject(weather, forKey: url.absoluteString as NSString)
           }
           self.completionHandler?(weather, cell, indexPath)
         }
-        getWeatherQueue.addOperation(operation)
+        self.getWeatherQueue.addOperation(operation)
       }
     }
   }
@@ -99,13 +108,13 @@ class WeatherHelper {
         let jsonArray = try JSONSerialization.jsonObject(with: data, options: .allowFragments) as? [[String]]
         
         var cities = [City]()
-        jsonArray?.forEach({ city in
+        jsonArray?.forEach { city in
           cities.append(City(title: city[Geobytes.InfoIndex.cityName.rawValue],
                              country: city[Geobytes.InfoIndex.countryName.rawValue],
                              distance: Double(city[Geobytes.InfoIndex.kilometres.rawValue]) ?? 0.0,
                              latitude: city[Geobytes.InfoIndex.latitude.rawValue],
                              longitude: city[Geobytes.InfoIndex.longitude.rawValue]))
-        })
+        }
         completion(cities)
       } catch let error as NSError {
         print(error)
@@ -113,5 +122,11 @@ class WeatherHelper {
       }
     }
     task.resume()
+  }
+  
+  // MARK: -
+  
+  private func weatherUrl(latitude: String, longitude: String) -> URL? {
+    return URL(string: "https://api.openweathermap.org/data/2.5/weather?lat=\(latitude)&lon=\(longitude)&appid=\(kOpenWeatherMapAppID)")
   }
 }
